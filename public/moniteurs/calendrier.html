@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Moniteurs - Calendrier</title>
+  <link rel="stylesheet" href="../assets/style.css" />
+  <script src="../config.js"></script>
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    import { formaterDateHeure } from "../assets/ui.js";
+    const supabase = createClient(CONFIG.supabase_url, CONFIG.supabase_anon_key);
+
+    async function exigerSession() {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) window.location.href = "./connexion.html";
+    }
+
+    async function charger() {
+      const { data, error } = await supabase
+        .from("demandes_reservation")
+        .select("id, participants_total, statut, moniteurs_requis, creneaux(debut, fin)")
+        .eq("type_demande", "standard")
+        .order("cree_le", { ascending: false });
+
+      if (error) return alert(error.message);
+
+      const cont = document.getElementById("liste");
+      cont.innerHTML = "";
+
+      (data || []).forEach(d => {
+        const debut = d.creneaux?.debut ? formaterDateHeure(d.creneaux.debut) : "—";
+        const fin = d.creneaux?.fin ? formaterDateHeure(d.creneaux.fin) : "—";
+
+        const div = document.createElement("div");
+        div.className = "carte";
+        div.innerHTML = `
+          <div><strong>Initiation</strong> • ${debut} → ${fin}</div>
+          <div style="color:#b6c0d1">Participants : ${d.participants_total} • Statut : ${d.statut}</div>
+          <button class="secondaire">Voir détails</button>
+        `;
+        div.querySelector("button").onclick = () => {
+          window.location.href = `./initiation.html?id_demande=${encodeURIComponent(d.id)}`;
+        };
+        cont.appendChild(div);
+      });
+    }
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      await exigerSession();
+      charger();
+    });
+  </script>
+</head>
+<body>
+  <header><div class="titre">Espace moniteurs — Calendrier</div></header>
+  <main>
+    <div id="liste"></div>
+  </main>
+</body>
+</html>
