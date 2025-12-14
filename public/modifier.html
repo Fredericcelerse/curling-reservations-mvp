@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Modifier une réservation</title>
+  <link rel="stylesheet" href="./assets/style.css" />
+  <script src="./config.js"></script>
+  <script type="module">
+    import { getQueryParam } from "./assets/ui.js";
+
+    const id_demande = getQueryParam("id_demande");
+    const token = getQueryParam("token");
+
+    function lireForm() {
+      return {
+        participants_total: Number(document.getElementById("participants_total").value),
+        participants_adultes: Number(document.getElementById("participants_adultes").value),
+        participants_mineurs: Number(document.getElementById("participants_mineurs").value),
+        ecole: document.getElementById("ecole").checked,
+        type_apero: document.getElementById("type_apero").value,
+        mode_paiement: document.getElementById("mode_paiement").value,
+        demandes_particulieres: document.getElementById("demandes_particulieres").value.trim() || null,
+        telephone: document.getElementById("telephone").value.trim() || null,
+        email: document.getElementById("email").value.trim() || null,
+        adresse: document.getElementById("adresse").value.trim(),
+        entreprise: document.getElementById("entreprise").value.trim() || null,
+      };
+    }
+
+    async function envoyerModif() {
+      if (!id_demande || !token) return alert("Lien invalide.");
+
+      const modifications = lireForm();
+
+      const res = await fetch(CONFIG.fn_modifier_client, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id_demande,
+          token_modification: token,
+          modifications,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.erreur) {
+        return alert(data.erreur || "Erreur modification.");
+      }
+
+      alert("Modification enregistrée.");
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("btnModif").onclick = envoyerModif;
+    });
+  </script>
+</head>
+<body>
+  <header><div class="titre">Modifier votre réservation</div></header>
+  <main>
+    <div class="carte">
+      <p style="color:#b6c0d1">
+        Les règles de délai sont appliquées automatiquement.
+      </p>
+
+      <div class="grille">
+        <div>
+          <label>Total</label>
+          <input id="participants_total" type="number" min="4" max="24" value="4" />
+        </div>
+        <div>
+          <label>Adultes</label>
+          <input id="participants_adultes" type="number" min="1" value="1" />
+        </div>
+        <div>
+          <label>Mineurs</label>
+          <input id="participants_mineurs" type="number" min="0" value="0" />
+        </div>
+        <div>
+          <label>Réservation école</label>
+          <label><input id="ecole" type="checkbox" /> Oui</label>
+        </div>
+      </div>
+
+      <div class="grille">
+        <div>
+          <label>Apéro</label>
+          <select id="type_apero">
+            <option value="aucun">Aucun</option>
+            <option value="plateau_boucher">Plateau du boucher</option>
+            <option value="plateau_traiteur">Plateau du traiteur</option>
+          </select>
+        </div>
+        <div>
+          <label>Mode de paiement</label>
+          <select id="mode_paiement">
+            <option value="cash">Cash</option>
+            <option value="twint">TWINT</option>
+            <option value="facture">Facture</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grille">
+        <div>
+          <label>Email</label>
+          <input id="email" type="email" />
+        </div>
+        <div>
+          <label>Téléphone</label>
+          <input id="telephone" />
+        </div>
+      </div>
+
+      <div class="grille">
+        <div>
+          <label>Entreprise</label>
+          <input id="entreprise" />
+        </div>
+        <div>
+          <label>Adresse</label>
+          <input id="adresse" />
+        </div>
+      </div>
+
+      <div>
+        <label>Demandes particulières</label>
+        <textarea id="demandes_particulieres"></textarea>
+      </div>
+
+      <button id="btnModif">Enregistrer les modifications</button>
+    </div>
+  </main>
+</body>
+</html>
