@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin - Créneaux</title>
+  <link rel="stylesheet" href="../assets/style.css" />
+  <script src="../config.js"></script>
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    import { formaterDateHeure } from "../assets/ui.js";
+    const supabase = createClient(CONFIG.supabase_url, CONFIG.supabase_anon_key);
+
+    async function exigerSession() {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) window.location.href = "./connexion.html";
+    }
+
+    async function charger() {
+      const { data, error } = await supabase
+        .from("creneaux")
+        .select("*")
+        .order("debut", { ascending: true });
+
+      if (error) return alert(error.message);
+
+      const cont = document.getElementById("liste");
+      cont.innerHTML = "";
+
+      (data || []).forEach(c => {
+        const div = document.createElement("div");
+        div.className = "carte";
+        div.innerHTML = `
+          <div><strong>${formaterDateHeure(c.debut)}</strong> → ${formaterDateHeure(c.fin)}</div>
+          <div style="color:#b6c0d1">Actif : ${c.actif ? "Oui" : "Non"}</div>
+          <div class="grille">
+            <button data-id="${c.id}" class="secondaire">Basculer actif</button>
+          </div>
+        `;
+        div.querySelector("button").onclick = async () => {
+          const { error: e2 } = await supabase.from("creneaux").update({ actif: !c.actif }).eq("id", c.id);
+          if (e2) return alert(e2.message);
+          charger();
+        };
+        cont.appendChild(div);
+      });
+    }
+
+    async function creer() {
+      const debut = document.getElementById("debut").value;
+      const fin = document.getElementById("fin").value;
+      if (!debut || !fin) return alert("Dates requises");
+
+      const { error } = await supabase.from("creneaux").insert({
+        debut: new Date(debut).toISOString(),
+        fin: new Date(fin).toISOString(),
+        actif: true,
+        pistes_totales: 3,
+      });
+
+      if (error) return alert(error.message);
+      document.getElementById("debut").value = "";
+      document.getElementById("fin").value = "";
+      charger();
+    }
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      await exigerSession();
+      document.getElementById("btnCreer").onclick = creer;
+      document.getElementById("lienDemandes").onclick = () => window.location.href = "./demandes.html";
+      charger();
+    });
+  </script>
+</head>
+<body>
+  <header><div class="titre">Admin — Créneaux</div></header>
+  <main>
+    <div class="carte">
+      <div class="grille">
+        <div>
+          <label>Début</label>
+          <input id="debut" type="datetime-local" />
+        </div>
+        <div>
+          <label>Fin</label>
+          <input id="fin" type="datetime-local" />
+        </div>
+      </div>
+      <button id="btnCreer">Créer le créneau</button>
+      <button id="lienDemandes" class="secondaire">Voir les demandes</button>
+    </div>
+
+    <div id="liste"></div>
+  </main>
+</body>
+</html>
