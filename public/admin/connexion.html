@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin - Connexion</title>
+  <link rel="stylesheet" href="../assets/style.css" />
+  <script src="../config.js"></script>
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    const supabase = createClient(CONFIG.supabase_url, CONFIG.supabase_anon_key);
+
+    async function connecter() {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return alert(error.message);
+
+      window.location.href = "./creneaux.html";
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("btn").onclick = connecter;
+    });
+  </script>
+</head>
+<body>
+  <header><div class="titre">Admin — Connexion</div></header>
+  <main>
+    <div class="carte">
+      <label>Email</label>
+      <input id="email" type="email" />
+      <label>Mot de passe</label>
+      <input id="password" type="password" />
+      <button id="btn">Se connecter</button>
+    </div>
+  </main>
+</body>
+</html>
