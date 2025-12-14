@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Moniteurs - Initiation</title>
+  <link rel="stylesheet" href="../assets/style.css" />
+  <script src="../config.js"></script>
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    import { getQueryParam, formaterDateHeure } from "../assets/ui.js";
+    const supabase = createClient(CONFIG.supabase_url, CONFIG.supabase_anon_key);
+
+    const id_demande = getQueryParam("id_demande");
+
+    async function exigerSession() {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) window.location.href = "./connexion.html";
+    }
+
+    async function charger() {
+      const { data, error } = await supabase
+        .from("demandes_reservation")
+        .select("*, creneaux(debut, fin)")
+        .eq("id", id_demande)
+        .single();
+
+      if (error || !data) return alert("Initiation introuvable");
+
+      document.getElementById("infos").innerHTML = `
+        <div><strong>${formaterDateHeure(data.creneaux.debut)}</strong> → ${formaterDateHeure(data.creneaux.fin)}</div>
+        <div style="color:#b6c0d1">
+          Participants : ${data.participants_total} • Pistes : ${data.pistes_requises} • Moniteurs requis : ${data.moniteurs_requis}
+        </div>
+        <div style="color:#b6c0d1">Apero : ${data.type_apero}</div>
+        <div style="color:#b6c0d1">Contact : ${data.prenom} ${data.nom}</div>
+      `;
+
+      await chargerMoniteurs();
+    }
+
+    async function chargerMoniteurs() {
+      const { data: mon, error } = await supabase
+        .from("moniteurs")
+        .select("id, nom_complet")
+        .eq("actif", true)
+        .order("nom_complet", { ascending: true });
+
+      if (error) return alert(error.message);
+
+      const sel = document.getElementById("id_moniteur");
+      sel.innerHTML = `<option value="">-- Choisir moniteur --</option>`;
+      (mon || []).forEach(m => {
+        const opt = document.createElement("option");
+        opt.value = m.id;
+        opt.textContent = m.nom_complet;
+        sel.appendChild(opt);
+      });
+    }
+
+    async function accepter() {
+      const id_moniteur = document.getElementById("id_moniteur").value;
+      if (!id_moniteur) return alert("Choisissez votre nom.");
+
+      const res = await fetch(CONFIG.fn_accepter_moniteur, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_demande, id_moniteur }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.erreur) return alert(data.erreur || "Erreur acceptation");
+
+      alert("Merci ! Votre acceptation a été enregistrée.");
+      window.location.href = "./calendrier.html";
+    }
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      await exigerSession();
+      document.getElementById("btnAccepter").onclick = accepter;
+      charger();
+    });
+  </script>
+</head>
+<body>
+  <header><div class="titre">Détail initiation</div></header>
+  <main>
+    <div class="carte" id="infos"></div>
+    <div class="carte">
+      <label>Je suis le moniteur suivant</label>
+      <select id="id_moniteur"></select>
+      <button id="btnAccepter">Je prends cette initiation</button>
+    </div>
+  </main>
+</body>
+</html>
