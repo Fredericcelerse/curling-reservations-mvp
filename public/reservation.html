@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Réserver une initiation</title>
+  <link rel="stylesheet" href="./assets/style.css" />
+  <script src="./config.js"></script>
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    import { formaterDateHeure } from "./assets/ui.js";
+
+    const supabase = createClient(CONFIG.supabase_url, CONFIG.supabase_anon_key);
+
+    let creneaux = [];
+    let creneauSelectionne = null;
+
+    function calculePistesRequises(total) {
+      return Math.floor((total + 7) / 8);
+    }
+
+    async function chargerCreneaux() {
+      const { data, error } = await supabase.rpc("lister_creneaux_public");
+      if (error) {
+        console.error(error);
+        alert("Impossible de charger les créneaux.");
+        return;
+      }
+      creneaux = data || [];
+      afficherCreneaux();
+    }
+
+    function afficherCreneaux() {
+      const cont = document.getElementById("listeCreneaux");
+      cont.innerHTML = "";
+
+      if (!creneaux.length) {
+        cont.innerHTML = "<div class='carte'>Aucun créneau disponible pour le moment.</div>";
+        return;
+      }
+
+      creneaux.forEach(c => {
+        const carte = document.createElement("div");
+        carte.className = "carte liste-creneaux";
+
+        const max = c.max_personnes_affichable;
+        const pistesLibres = c.pistes_libres;
+
+        carte.innerHTML = `
+          <div>
+            <strong>${formaterDateHeure(c.debut)}</strong> → ${formaterDateHeure(c.fin)}
+            <span class="badge ${pistesLibres >= 2 ? "ok" : pistesLibres === 1 ? "warn" : "bad"}">
+              ${pistesLibres} piste(s) libre(s)
+            </span>
+          </div>
+          <div style="margin-top:6px;color:#b6c0d1">
+            Capacité réservable actuelle : <strong>${max}</strong> personnes
+          </div>
+          <button data-id="${c.id}">Choisir ce créneau</button>
+        `;
+
+        carte.querySelector("button").onclick = () => {
+          creneauSelectionne = c;
+          document.getElementById("id_creneau").value = c.id;
+          document.getElementById("resumeCreneau").textContent =
+            `${formaterDateHeure(c.debut)} → ${formaterDateHeure(c.fin)} | ${c.pistes_libres} piste(s) libre(s) | max actuel ${c.max_personnes_affichable}`;
+          window.scrollTo({ top: document.getElementById("formulaire").offsetTop - 10, behavior: "smooth" });
+          ajusterMaxParticipants();
+        };
+
+        cont.appendChild(carte);
+      });
+    }
+
+    function ajusterMaxParticipants() {
+      const input = document.getElementById("participants_total");
+      if (!creneauSelectionne) return;
+      input.max = String(creneauSelectionne.max_personnes_affichable);
+      document.getElementById("maxDyn").textContent = creneauSelectionne.max_personnes_affichable;
+    }
+
+    function basculerSpeciale(siSpeciale) {
+      document.getElementById("zoneStandard").style.display = siSpeciale ? "none" : "block";
+      document.getElementById("zoneSpeciale").style.display = siSpeciale ? "block" : "none";
+    }
+
+    function lireFormulaire() {
+      const total = Number(document.getElementById("participants_total").value);
+      const adultes = Number(document.getElementById("participants_adultes").value);
+      const mineurs = Number(document.getElementById("participants_mineurs").value);
+      const ecole = document.getElementById("ecole").checked;
+
+      const type_apero = document.getElementById("type_apero").value;
+
+      return {
+        id_creneau: document.getElementById("id_creneau").value || null,
+        participants_total: total,
+        participants_adultes: adultes,
+        participants_mineurs: mineurs,
+        ecole,
+        type_apero,
+        prenom: document.getElementById("prenom").value.trim(),
+        nom: document.getElementById("nom").value.trim(),
+        entreprise: document.getElementById("entreprise").value.trim() || null,
+        adresse: document.getElementById("adresse").value.trim(),
+        telephone: document.getElementById("telephone").value.trim() || null,
+        email: document.getElementById("email").value.trim() || null,
+        mode_paiement: document.getElementById("mode_paiement").value,
+        demandes_particulieres: document.getElementById("demandes_particulieres").value.trim() || null,
+      };
+    }
+
+    function validationsFront(payload) {
+      if (!payload.prenom || !payload.nom || !payload.adresse) return "Merci de compléter vos informations personnelles.";
+      if (!payload.mode_paiement) return "Veuillez choisir un mode de paiement.";
+
+      if (payload.participants_total < 4) return "Minimum 4 personnes pour réserver.";
+      if (payload.participants_adultes < 1) return "Au moins un adulte est requis.";
+      if (!payload.ecole && payload.participants_adultes + payload.participants_mineurs !== payload.participants_total) {
+        return "La somme adultes + mineurs doit égaler le total.";
+      }
+      if (payload.participants_total > 24) return null; // bascule spéciale
+      if (!payload.id_creneau) return "Veuillez sélectionner un créneau.";
+      return null;
+    }
+
+    async function envoyer() {
+      const ok = document.getElementById("conditions").checked;
+      if (!ok) return alert("Veuillez accepter les conditions particulières.");
+
+      const payload = lireFormulaire();
+      const err = validationsFront(payload);
+      if (err) return alert(err);
+
+      // Si >24 -> demande spéciale
+      if (payload.participants_total > 24) {
+        basculerSpeciale(true);
+        return;
+      }
+
+      // Vérification max dynamique côté front
+      if (creneauSelectionne && payload.participants_total > creneauSelectionne.max_personnes_affichable) {
+        return alert("Ce créneau n'a plus assez de capacité disponible pour ce nombre de participants.");
+      }
+
+      const res = await fetch(CONFIG.fn_creer_standard, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.erreur) {
+        return alert(data.erreur || "Erreur lors de la création.");
+      }
+
+      // Stocker temporairement le token de modif pour l'afficher en page merci (MVP)
+      sessionStorage.setItem("derniere_demande_id", data.id_demande);
+      sessionStorage.setItem("derniere_demande_token", data.token_modification);
+
+      window.location.href = "./merci.html";
+    }
+
+    async function envoyerSpeciale() {
+      const payload = lireFormulaire();
+      if (!payload.prenom || !payload.nom || !payload.adresse) return alert("Merci de compléter vos informations personnelles.");
+      if (!payload.mode_paiement) return alert("Veuillez choisir un mode de paiement.");
+      if (payload.participants_total <= 24) return alert("Cette section est réservée aux demandes > 24 ou cas particuliers.");
+
+      const res = await fetch(CONFIG.fn_creer_speciale, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok || data.erreur) return alert(data.erreur || "Erreur demande spéciale.");
+
+      sessionStorage.setItem("derniere_demande_id", data.id_demande);
+      sessionStorage.removeItem("derniere_demande_token");
+
+      window.location.href = "./merci.html";
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      chargerCreneaux();
+      document.getElementById("participants_total").addEventListener("input", () => {
+        const total = Number(document.getElementById("participants_total").value);
+        if (total > 24) basculerSpeciale(true);
+        else basculerSpeciale(false);
+
+        const pistes = calculePistesRequises(total);
+        document.getElementById("pistesEstimees").textContent = isFinite(pistes) ? String(pistes) : "-";
+      });
+
+      document.getElementById("btnEnvoyer").onclick = envoyer;
+      document.getElementById("btnEnvoyerSpeciale").onclick = envoyerSpeciale;
+    });
+  </script>
+</head>
+<body>
+  <header><div class="titre">Réserver une initiation</div></header>
+  <main>
+
+    <div class="carte">
+      <strong>Créneaux disponibles</strong>
+      <div id="listeCreneaux"></div>
+    </div>
+
+    <div id="formulaire" class="carte">
+      <strong>Formulaire de réservation</strong>
+      <p style="color:#b6c0d1">
+        Règles : délai minimal 5 jours • minimum 4 personnes • 8 personnes max par piste • 3 pistes disponibles.
+      </p>
+
+      <div class="carte" style="background:#0f1420">
+        <div><strong>Créneau sélectionné :</strong></div>
+        <div id="resumeCreneau" style="color:#b6c0d1">Aucun</div>
+        <input type="hidden" id="id_creneau" />
+        <div style="margin-top:6px">
+          Capacité max actuelle du créneau : <strong id="maxDyn">-</strong>
+        </div>
+      </div>
+
+      <div class="grille">
+        <div>
+          <label>Nombre total de participants</label>
+          <input id="participants_total" type="number" min="1" value="4" />
+        </div>
+        <div>
+          <label>Pistes estimées (automatique)</label>
+          <input id="pistesEstimees" type="text" readonly value="1" />
+        </div>
+        <div>
+          <label>Adultes</label>
+          <input id="participants_adultes" type="number" min="0" value="1" />
+        </div>
+        <div>
+          <label>Mineurs</label>
+          <input id="participants_mineurs" type="number" min="0" value="0" />
+        </div>
+      </div>
+
+      <div style="margin-top:10px">
+        <label><input id="ecole" type="checkbox" /> Réservation école (prix sur demande)</label>
+      </div>
+
+      <div class="grille">
+        <div>
+          <label>Apéro</label>
+          <select id="type_apero">
+            <option value="aucun">Aucun</option>
+            <option value="plateau_boucher">Plateau du boucher (70 CHF)</option>
+            <option value="plateau_traiteur">Plateau du traiteur (110 CHF)</option>
+          </select>
+        </div>
+        <div>
+          <label>Mode de paiement</label>
+          <select id="mode_paiement">
+            <option value="">-- Choisir --</option>
+            <option value="cash">Cash</option>
+            <option value="twint">TWINT</option>
+            <option value="facture">Facture</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grille">
+        <div>
+          <label>Prénom</label>
+          <input id="prenom" />
+        </div>
+        <div>
+          <label>Nom</label>
+          <input id="nom" />
+        </div>
+        <div>
+          <label>Entreprise (optionnel)</label>
+          <input id="entreprise" />
+        </div>
+        <div>
+          <label>Téléphone</label>
+          <input id="telephone" />
+        </div>
+      </div>
+
+      <div class="grille">
+        <div>
+          <label>Email</label>
+          <input id="email" type="email" />
+        </div>
+        <div>
+          <label>Adresse</label>
+          <input id="adresse" />
+        </div>
+      </div>
+
+      <div>
+        <label>Demandes particulières</label>
+        <textarea id="demandes_particulieres"></textarea>
+      </div>
+
+      <div style="margin-top:8px">
+        <label><input id="conditions" type="checkbox" /> J’accepte les conditions particulières</label>
+      </div>
+
+      <div id="zoneStandard">
+        <button id="btnEnvoyer">Envoyer la demande de réservation</button>
+      </div>
+
+      <div id="zoneSpeciale" style="display:none">
+        <div class="carte">
+          <strong>Demande spéciale</strong>
+          <p style="color:#b6c0d1">
+            Votre groupe dépasse 24 personnes ou nécessite une organisation spécifique.
+            Merci d’envoyer une demande spéciale.
+          </p>
+          <button id="btnEnvoyerSpeciale">Envoyer une demande spéciale</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</body>
+</html>
