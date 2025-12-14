@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin - Demandes</title>
+  <link rel="stylesheet" href="../assets/style.css" />
+  <script src="../config.js"></script>
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    import { formaterDateHeure } from "../assets/ui.js";
+    const supabase = createClient(CONFIG.supabase_url, CONFIG.supabase_anon_key);
+
+    async function exigerSession() {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) window.location.href = "./connexion.html";
+    }
+
+    function badgeStatut(statut) {
+      if (statut === "soumise") return "warn";
+      if (statut === "acceptee") return "ok";
+      if (statut === "annulee") return "bad";
+      return "warn";
+    }
+
+    async function charger() {
+      const { data, error } = await supabase
+        .from("demandes_reservation")
+        .select("*, creneaux(debut, fin)")
+        .order("cree_le", { ascending: false });
+
+      if (error) return alert(error.message);
+
+      const cont = document.getElementById("liste");
+      cont.innerHTML = "";
+
+      (data || []).forEach(d => {
+        const div = document.createElement("div");
+        div.className = "carte";
+
+        const debut = d.creneaux?.debut ? formaterDateHeure(d.creneaux.debut) : "—";
+        const fin = d.creneaux?.fin ? formaterDateHeure(d.creneaux.fin) : "—";
+
+        div.innerHTML = `
+          <div>
+            <strong>${d.prenom} ${d.nom}</strong>
+            <span class="badge ${badgeStatut(d.statut)}">${d.statut}</span>
+          </div>
+          <div style="color:#b6c0d1">
+            Type : ${d.type_demande} • Participants : ${d.participants_total}
+            • Pistes : ${d.pistes_requises ?? "-"} • Moniteurs : ${d.moniteurs_requis ?? "-"}
+          </div>
+          <div style="color:#b6c0d1">
+            Créneau : ${debut} → ${fin}
+          </div>
+          <div class="grille" style="margin-top:8px">
+            <button data-action="accepter">Accepter</button>
+            <button data-action="annuler" class="secondaire">Annuler</button>
+          </div>
+        `;
+
+        const [btnA, btnB] = div.querySelectorAll("button");
+        btnA.onclick = async () => {
+          const { error: e2 } = await supabase.from("demandes_reservation").update({ statut: "acceptee" }).eq("id", d.id);
+          if (e2) return alert(e2.message);
+          charger();
+        };
+        btnB.onclick = async () => {
+          const { error: e2 } = await supabase.from("demandes_reservation").update({ statut: "annulee" }).eq("id", d.id);
+          if (e2) return alert(e2.message);
+          charger();
+        };
+
+        cont.appendChild(div);
+      });
+    }
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      await exigerSession();
+      charger();
+    });
+  </script>
+</head>
+<body>
+  <header><div class="titre">Admin — Demandes</div></header>
+  <main>
+    <div id="liste"></div>
+  </main>
+</body>
+</html>
