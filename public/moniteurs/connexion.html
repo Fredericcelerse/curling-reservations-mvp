@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Moniteurs - Connexion</title>
+  <link rel="stylesheet" href="../assets/style.css" />
+  <script src="../config.js"></script>
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    const supabase = createClient(CONFIG.supabase_url, CONFIG.supabase_anon_key);
+
+    // Ici tu mets le compte partagé moniteurs
+    const emailPartage = "moniteurs@club.ch";
+
+    async function connecter() {
+      const password = document.getElementById("password").value;
+      const { error } = await supabase.auth.signInWithPassword({ email: emailPartage, password });
+      if (error) return alert(error.message);
+      window.location.href = "./calendrier.html";
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("btn").onclick = connecter;
+    });
+  </script>
+</head>
+<body>
+  <header><div class="titre">Espace moniteurs — Connexion</div></header>
+  <main>
+    <div class="carte">
+      <p style="color:#b6c0d1">Mot de passe commun du groupe moniteurs.</p>
+      <label>Mot de passe</label>
+      <input id="password" type="password" />
+      <button id="btn">Se connecter</button>
+    </div>
+  </main>
+</body>
+</html>
