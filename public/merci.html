@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Merci</title>
+  <link rel="stylesheet" href="./assets/style.css" />
+  <script type="module">
+    import { getQueryParam } from "./assets/ui.js";
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const id = sessionStorage.getItem("derniere_demande_id");
+      const token = sessionStorage.getItem("derniere_demande_token");
+
+      const bloc = document.getElementById("infoModif");
+      if (id && token) {
+        // MVP : on affiche le lien (en attendant l’email automatisé)
+        const lien = `${window.location.origin}/modifier.html?id_demande=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`;
+        bloc.innerHTML = `
+          <div class="carte">
+            <strong>Lien de modification (MVP)</strong>
+            <p style="color:#b6c0d1">
+              Pour la première version, le lien s’affiche ici.
+              Ensuite, il sera envoyé automatiquement par email.
+            </p>
+            <input value="${lien}" readonly />
+          </div>
+        `;
+      } else {
+        bloc.innerHTML = `
+          <div class="carte">
+            <p>Votre demande a été enregistrée.</p>
+          </div>
+        `;
+      }
+    });
+  </script>
+</head>
+<body>
+  <header><div class="titre">Merci !</div></header>
+  <main>
+    <div class="carte">
+      <p>Votre demande a bien été envoyée. Une confirmation sera envoyée par email (version finale).</p>
+    </div>
+    <div id="infoModif"></div>
+    <a href="./reservation.html"><button class="secondaire">Retour aux créneaux</button></a>
+  </main>
+</body>
+</html>
